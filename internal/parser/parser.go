@@ -51,7 +51,8 @@ func findClosingIdx(b []byte, op byte) (int, error) {
 }
 
 func findType(b []byte, param string, allMaps map[string]map[string]string) (string, int, error) {
-	for i := range b {
+	var i int
+	for i < len(b) {
 		if b[i] == '"' {
 			re := regexp.MustCompile(`,"\w+":|$`)
 			endIdxs := re.FindIndex(b[i:])
@@ -79,7 +80,7 @@ func findType(b []byte, param string, allMaps map[string]map[string]string) (str
 			if err != nil {
 				log.Fatal(err)
 			}
-			makeTypeMap(b[i:idx], utils.SnakeToCamelCase(param), allMaps)
+			makeTypeMap(b[i:idx+1], utils.SnakeToCamelCase(param), allMaps)
 			return utils.Capitalize(param), i + idx + 1, nil
 		}
 
@@ -93,6 +94,12 @@ func findType(b []byte, param string, allMaps map[string]map[string]string) (str
 				log.Fatal(err)
 			}
 			return "[]" + t, i + idx + 1, nil
+		}
+
+		if b[i] == 'n' {
+			re := regexp.MustCompile(`,"\w+":|$`)
+			endIdxs := re.FindIndex(b[i:])
+			return "null", i + endIdxs[0], nil
 		}
 		i++
 	}
