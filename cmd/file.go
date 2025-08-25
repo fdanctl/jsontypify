@@ -6,14 +6,15 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/fdanctl/jsontypify/internal/parser"
 	"github.com/spf13/cobra"
 )
 
-// textCmd represents the text command
-var textCmd = &cobra.Command{
-	Use:   "text",
+// fileCmd represents the file command
+var fileCmd = &cobra.Command{
+	Use:   "file",
 	Args:  cobra.MinimumNArgs(1),
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
@@ -23,7 +24,7 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		str := args[0]
+		path := args[0]
 		indent, err := cmd.Flags().GetInt("indent")
 		if err != nil {
 			fmt.Println(err)
@@ -33,24 +34,29 @@ to quickly create a Cobra application.`,
 			log.Fatalf("%s is not a valid language. Valid languages: %v", lang, parser.GetValidLangs())
 		}
 
-		fmt.Println(len(str), indent)
-		res := parser.ParseTypes([]byte(str), parser.Lang(lang), indent)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println(path, indent)
+		res := parser.ParseTypes(data, parser.Lang(lang), indent)
 		println(res)
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(textCmd)
-	textCmd.Flags().IntP("indent", "i", 4, "Output indentation")
-	textCmd.Flags().StringP("language", "l", "go", "Output to especified language (\"go\", \"ts\")")
+	rootCmd.AddCommand(fileCmd)
+	fileCmd.Flags().IntP("indent", "i", 4, "Output indentation")
+	fileCmd.Flags().StringP("language", "l", "go", "Output to especified language (\"go\", \"ts\")")
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// textCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// fileCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// textCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// fileCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

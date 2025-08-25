@@ -11,11 +11,11 @@ import (
 	"github.com/fdanctl/jsontypify/internal/utils"
 )
 
-type Lang int8
+type Lang string
 
 const (
-	GO Lang = iota
-	TS
+	GO Lang = "go"
+	TS Lang = "ts"
 )
 
 var validLangs = []string{"go", "ts"}
@@ -133,19 +133,29 @@ func makeTypeMap(b []byte, name string, allMaps map[string]map[string]string) {
 	allMaps[name] = typeMap
 }
 
-func goStruct(allMaps *map[string]map[string]string) string {
+func goStruct(allMaps *map[string]map[string]string, indent int) string {
+	var indentStr string
+	for range indent {
+		indentStr += " "
+	}
+
 	var str string
 	for name, m := range *allMaps {
 		str += fmt.Sprintf("type %s struct {\n", utils.Capitalize(name))
 		for p, t := range m {
-			str += fmt.Sprintf("  %s %s `json:\"%s\"`\n", utils.Capitalize(utils.SnakeToCamelCase(p)), t, p)
+			str += fmt.Sprintf("%s%s %s `json:\"%s\"`\n", indentStr, utils.Capitalize(utils.SnakeToCamelCase(p)), t, p)
 		}
 		str += "}\n\n"
 	}
 	return str
 }
 
-func tsInterface(allMaps *map[string]map[string]string) string {
+func tsInterface(allMaps *map[string]map[string]string, indent int) string {
+	var indentStr string
+	for range indent {
+		indentStr += " "
+	}
+
 	var str string
 	for name, m := range *allMaps {
 		str += fmt.Sprintf("type interface %s {\n", utils.Capitalize(name))
@@ -157,7 +167,7 @@ func tsInterface(allMaps *map[string]map[string]string) string {
 			t = string(re.ReplaceAll([]byte(t), []byte("number")))
 			re = regexp.MustCompile(`bool`)
 			t = string(re.ReplaceAll([]byte(t), []byte("boolean")))
-			str += fmt.Sprintf("  %s: %s;\n", p, t)
+			str += fmt.Sprintf("%s%s: %s;\n", indentStr, utils.SnakeToCamelCase(p), t)
 		}
 		str += "}\n\n"
 	}
@@ -172,8 +182,8 @@ func GetValidLangs() string {
 	return strings.Join(validLangs, ", ")
 }
 
-func ParseTypes(s string, lang Lang) string {
-	if !json.Valid([]byte(s)) {
+func ParseTypes(s []byte, lang Lang, indent int) string {
+	if !json.Valid(s) {
 		log.Fatal("Invalid json")
 	}
 
@@ -184,8 +194,8 @@ func ParseTypes(s string, lang Lang) string {
 	makeTypeMap(flaten, "main", allMaps)
 
 	if lang == GO {
-		return goStruct(&allMaps)
+		return goStruct(&allMaps, indent)
 	} else {
-		return tsInterface(&allMaps)
+		return tsInterface(&allMaps, indent)
 	}
 }
