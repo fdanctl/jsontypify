@@ -1,16 +1,28 @@
 package parser
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/fdanctl/jsontypify/internal/utils"
 )
 
-func findClosingIdx(b []byte, op byte) int {
+type Lang int8
+
+const (
+	GO Lang = iota
+	TS
+)
+
+var validLangs = []string{"go", "ts"}
+
+func findClosingIdx(b []byte, op byte) (int, error) {
 	if op != '[' && op != '{' {
-		fmt.Println("error")
-		return -1
+		return -1, fmt.Errorf("op char must be '[' or '{'")
 	}
 
 	var openingCount int
@@ -30,26 +42,26 @@ func findClosingIdx(b []byte, op byte) int {
 		if b[i] == op+2 {
 			openingCount--
 			if openingCount <= 0 {
-				return i
+				return i, nil
 			}
 		}
 		i++
 	}
-	return -1
+	return -1, fmt.Errorf("closing %c not found in %s", op, b)
 }
 
-func findType(b []byte, param string, allMaps map[string]map[string]string) (string, int) {
+func findType(b []byte, param string, allMaps map[string]map[string]string) (string, int, error) {
 	for i := range b {
 		if b[i] == '"' {
 			re := regexp.MustCompile(`,"\w+":|$`)
 			endIdxs := re.FindIndex(b[i:])
-			return "string", i + endIdxs[0]
+			return "string", i + endIdxs[0], nil
 		}
 
 		if b[i] == 't' || b[i] == 'f' {
 			re := regexp.MustCompile(`,"\w+":|$`)
 			endIdxs := re.FindIndex(b[i:])
-			return "bool", i + endIdxs[0]
+			return "bool", i + endIdxs[0], nil
 		}
 		// 0 - 9 char have rune/byte values [48-57]
 		if b[i] >= 48 && b[i] <= 57 {
@@ -57,25 +69,35 @@ func findType(b []byte, param string, allMaps map[string]map[string]string) (str
 			endIdxs := re.FindIndex(b[i:])
 			re = regexp.MustCompile(`.`)
 			if re.Match(b[i : i+endIdxs[0]]) {
-				return "float64", i + endIdxs[0]
+				return "float64", i + endIdxs[0], nil
 			}
-			return "int", i + endIdxs[0]
+			return "int", i + endIdxs[0], nil
 		}
 
 		if b[i] == '{' {
-			idx := findClosingIdx(b[i:], '{')
+			idx, err := findClosingIdx(b[i:], '{')
+			if err != nil {
+				log.Fatal(err)
+			}
 			makeTypeMap(b[i:idx], utils.SnakeToCamelCase(param), allMaps)
-			return utils.Capitalize(param), i + idx + 1
+			return utils.Capitalize(param), i + idx + 1, nil
 		}
 
 		if b[i] == '[' {
-			t, _ := findType(b[i+1:], param, allMaps)
-			return "[]" + t, i + findClosingIdx(b[i:], '[')
+			t, _, err := findType(b[i+1:], param, allMaps)
+			if err != nil {
+				break
+			}
+			idx, err := findClosingIdx(b[i:], '[')
+			if err != nil {
+				log.Fatal(err)
+			}
+			return "[]" + t, i + idx + 1, nil
 		}
 		i++
 	}
 
-	return "error", -1
+	return "", -1, fmt.Errorf("Malformed json")
 }
 
 func makeTypeMap(b []byte, name string, allMaps map[string]map[string]string) {
@@ -92,7 +114,10 @@ func makeTypeMap(b []byte, name string, allMaps map[string]map[string]string) {
 		paramIdxs := re.FindIndex(b[i:])
 		param := string(b[i+paramIdxs[0]+1 : i+paramIdxs[1]-2])
 
-		paramType, end := findType(b[i+paramIdxs[1]:], param, allMaps)
+		paramType, end, err := findType(b[i+paramIdxs[1]:], param, allMaps)
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		typeMap[param] = paramType
 		i += paramIdxs[1] + end + 1
@@ -100,13 +125,6 @@ func makeTypeMap(b []byte, name string, allMaps map[string]map[string]string) {
 	}
 	allMaps[name] = typeMap
 }
-
-type Lang int
-
-const (
-	GO Lang = iota
-	TS
-)
 
 func goStruct(allMaps *map[string]map[string]string) string {
 	var str string
@@ -139,7 +157,19 @@ func tsInterface(allMaps *map[string]map[string]string) string {
 	return str
 }
 
+func IsValidLang(s string) bool {
+	return slices.Contains(validLangs, s)
+}
+
+func GetValidLangs() string {
+	return strings.Join(validLangs, ", ")
+}
+
 func ParseTypes(s string, lang Lang) string {
+	if !json.Valid([]byte(s)) {
+		log.Fatal("Invalid json")
+	}
+
 	re := regexp.MustCompile(`(?m)^\s+|\n`)
 	flaten := re.ReplaceAll([]byte(s), []byte(""))
 

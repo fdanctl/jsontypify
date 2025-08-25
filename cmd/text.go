@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/fdanctl/jsontypify/internal/parser"
 	"github.com/spf13/cobra"
@@ -27,6 +28,10 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			fmt.Println(err)
 		}
+		lang, err := cmd.Flags().GetString("language")
+		if !parser.IsValidLang(lang) {
+			log.Fatalf("%s is not a valid language. Valid languages: %v", lang, parser.GetValidLangs())
+		}
 
 		fmt.Println(len(str), indent)
 		res := parser.ParseTypes(str, parser.GO)
@@ -37,6 +42,7 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(textCmd)
 	textCmd.Flags().IntP("indent", "i", 4, "Output indentation")
+	textCmd.Flags().StringP("language", "l", "go", "Output to especified language (\"go\", \"ts\")")
 
 	// Here you will define your flags and configuration settings.
 
