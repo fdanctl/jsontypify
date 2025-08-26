@@ -24,17 +24,27 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		str := args[0]
+
 		indent, err := cmd.Flags().GetInt("indent")
 		if err != nil {
 			fmt.Println(err)
 		}
+
 		lang, err := cmd.Flags().GetString("language")
-		if !parser.IsValidLang(lang) {
-			log.Fatalf("%s is not a valid language. Valid languages: %v", lang, parser.GetValidLangs())
+		if err != nil {
+			fmt.Println(err)
 		}
 
-		fmt.Println(len(str), indent)
-		res := parser.ParseTypes([]byte(str), parser.Lang(lang), indent)
+		name, err := cmd.Flags().GetString("name")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		if !parser.IsValidLang(lang) {
+			log.Fatalf("%s is not a valid language. Valid languages: %s", lang, parser.GetValidLangs())
+		}
+
+		res := parser.ParseTypes([]byte(str), parser.Lang(lang), indent, name)
 		println(res)
 	},
 }
@@ -42,7 +52,8 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(textCmd)
 	textCmd.Flags().IntP("indent", "i", 4, "Output indentation")
-	textCmd.Flags().StringP("language", "l", "go", "Output to especified language (\"go\", \"ts\")")
+	textCmd.Flags().StringP("language", "l", "go", fmt.Sprintf("Output to especified language (%s)", parser.GetValidLangs()))
+	textCmd.Flags().StringP("name", "n", "Main", "Struct/Interface name")
 
 	// Here you will define your flags and configuration settings.
 

@@ -24,31 +24,43 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		path := args[0]
 		indent, err := cmd.Flags().GetInt("indent")
 		if err != nil {
 			fmt.Println(err)
 		}
+
 		lang, err := cmd.Flags().GetString("language")
 		if !parser.IsValidLang(lang) {
-			log.Fatalf("%s is not a valid language. Valid languages: %v", lang, parser.GetValidLangs())
+			log.Fatalf(
+				"%s is not a valid language. Valid languages: %v",
+				lang,
+				parser.GetValidLangs(),
+			)
 		}
 
-		data, err := os.ReadFile(path)
+		name, err := cmd.Flags().GetString("name")
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println(err)
 		}
 
-		fmt.Println(path, indent)
-		res := parser.ParseTypes(data, parser.Lang(lang), indent)
-		println(res)
+		for _, path := range args {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				fmt.Println(path)
+			}
+
+			res := parser.ParseTypes(data, parser.Lang(lang), indent, name)
+			println(res)
+		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(fileCmd)
 	fileCmd.Flags().IntP("indent", "i", 4, "Output indentation")
-	fileCmd.Flags().StringP("language", "l", "go", "Output to especified language (\"go\", \"ts\")")
+	fileCmd.Flags().
+		StringP("language", "l", "go", fmt.Sprintf("Output to especified language (%s)", parser.GetValidLangs()))
+	fileCmd.Flags().StringP("name", "n", "Main", "Struct/Interface name")
 
 	// Here you will define your flags and configuration settings.
 

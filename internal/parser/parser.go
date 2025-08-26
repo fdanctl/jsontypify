@@ -193,7 +193,7 @@ func GetValidLangs() string {
 	return strings.Join(validLangs, ", ")
 }
 
-func ParseTypes(s []byte, lang Lang, indent int) string {
+func ParseTypes(s []byte, lang Lang, indent int, name string) string {
 	if !json.Valid(s) {
 		log.Fatal("Invalid json")
 	}
@@ -202,7 +202,7 @@ func ParseTypes(s []byte, lang Lang, indent int) string {
 	flaten := re.ReplaceAll([]byte(s), []byte(""))
 
 	allMaps := make(map[string]map[string]string, 0)
-	makeTypeMap(flaten, "main", allMaps)
+	makeTypeMap(flaten, name, allMaps)
 
 	if lang == GO {
 		return goStruct(&allMaps, indent)
