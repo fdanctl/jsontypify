@@ -35,9 +35,9 @@ func findClosingIdx(b []byte, op byte) (int, error) {
 		}
 		if b[i] == '"' {
 			i++
-			re := regexp.MustCompile(`"`)
+			re := regexp.MustCompile(`[^\\]"`)
 			idx := re.FindIndex(b[i:])
-			i += idx[0]
+			i += idx[1]
 		}
 		if b[i] == op+2 {
 			openingCount--
@@ -50,13 +50,22 @@ func findClosingIdx(b []byte, op byte) (int, error) {
 	return -1, fmt.Errorf("closing %c not found in %s", op, b)
 }
 
+func isDate(b []byte) bool {
+	re := regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`)
+	return re.Match(b)
+}
+
 func findType(b []byte, param string, allMaps map[string]map[string]string) (string, int, error) {
 	var i int
 	for i < len(b) {
 		if b[i] == '"' {
 			re := regexp.MustCompile(`,"\w+":|$`)
 			endIdxs := re.FindIndex(b[i:])
-			return "string", i + endIdxs[0], nil
+			if isDate(b[i : i+endIdxs[0]]) {
+				return "time.Time", i + endIdxs[0], nil
+			} else {
+				return "string", i + endIdxs[0], nil
+			}
 		}
 
 		if b[i] == 't' || b[i] == 'f' {
@@ -167,6 +176,8 @@ func tsInterface(allMaps *map[string]map[string]string, indent int) string {
 			t = string(re.ReplaceAll([]byte(t), []byte("number")))
 			re = regexp.MustCompile(`bool`)
 			t = string(re.ReplaceAll([]byte(t), []byte("boolean")))
+			re = regexp.MustCompile(`time.Time`)
+			t = string(re.ReplaceAll([]byte(t), []byte("Date")))
 			str += fmt.Sprintf("%s%s: %s;\n", indentStr, utils.SnakeToCamelCase(p), t)
 		}
 		str += "}\n\n"
