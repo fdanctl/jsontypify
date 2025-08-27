@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/fdanctl/jsontypify/internal/utils"
@@ -58,7 +59,23 @@ func isDate(b []byte) bool {
 	return re.Match(b)
 }
 
-func findType(b []byte, param string, allMaps map[string]map[string]string) (string, int, error) {
+func safelyAddMap(name string, v *map[string]string, allMaps *map[string]map[string]string) {
+	var n int
+	_, ok := (*allMaps)[name]
+	for ok {
+		n++
+		k := name + strconv.Itoa(n)
+		_, ok = (*allMaps)[k]
+	}
+	if n == 0 {
+		(*allMaps)[name] = *v
+	} else {
+		k := name + strconv.Itoa(n)
+		(*allMaps)[k] = *v
+	}
+}
+
+func findType(b []byte, param string, allMaps *map[string]map[string]string) (string, int, error) {
 	var i int
 	for i < len(b) {
 		if b[i] == '"' {
@@ -89,15 +106,17 @@ func findType(b []byte, param string, allMaps map[string]map[string]string) (str
 
 		if b[i] == '{' {
 			if b[i+1] == '}' {
-				allMaps[utils.SnakeToCamelCase(param)] = make(map[string]string, 0)
+				v := make(map[string]string, 0) 
+				safelyAddMap(utils.SnakeToCamelCase(param), &v, allMaps)
 				return utils.Capitalize(param), i + 2, nil
 			}
+
 			idx, err := findClosingIdx(b[i:], '{')
 			if err != nil {
 				log.Fatal(err)
 			}
 			makeTypeMap(b[i:idx+1], utils.SnakeToCamelCase(param), allMaps)
-			return utils.Capitalize(param), i + idx + 1, nil
+			return utils.Capitalize(utils.SnakeToCamelCase(param)), i + idx + 1, nil
 		}
 
 		if b[i] == '[' {
@@ -126,11 +145,10 @@ func findType(b []byte, param string, allMaps map[string]map[string]string) (str
 	return "", -1, fmt.Errorf("Malformed json")
 }
 
-func makeTypeMap(b []byte, name string, allMaps map[string]map[string]string) {
+func makeTypeMap(b []byte, name string, allMaps *map[string]map[string]string) {
 	typeMap := make(map[string]string)
 	var i int
 	for i < len(b) {
-
 		re := regexp.MustCompile(`"[^"]*":`)
 
 		if !re.Match(b[i:]) {
@@ -149,7 +167,7 @@ func makeTypeMap(b []byte, name string, allMaps map[string]map[string]string) {
 		i += paramIdxs[1] + end + 1
 
 	}
-	allMaps[name] = typeMap
+	safelyAddMap(name, &typeMap, allMaps)
 }
 
 func goStruct(allMaps *map[string]map[string]string, indent int) string {
@@ -177,17 +195,34 @@ func tsInterface(allMaps *map[string]map[string]string, indent int) string {
 
 	var str string
 	for name, m := range *allMaps {
-		str += fmt.Sprintf("type interface %s {\n", utils.Capitalize(name))
+		str += fmt.Sprintf("interface %s {\n", utils.Capitalize(name))
 		for p, t := range m {
+			re := regexp.MustCompile(`(^|\[\])(int|float64)$`)
+			t = re.ReplaceAllStringFunc(t, func(s string) string {
+				groups := re.FindStringSubmatch(s)
+				groups[2] = "number"
+				return groups[1] + groups[2]
+			})
+
+			re = regexp.MustCompile(`(^|\[\])(bool)`)
+			t = re.ReplaceAllStringFunc(t, func(s string) string {
+				groups := re.FindStringSubmatch(s)
+				groups[2] = "bool"
+				return groups[1] + groups[2]
+			})
+
+			re = regexp.MustCompile(`(^|\[\])(time\.Time)`)
+			t = re.ReplaceAllStringFunc(t, func(s string) string {
+				groups := re.FindStringSubmatch(s)
+				groups[2] = "Date"
+				return groups[1] + groups[2]
+			})
+
 			if t[0] == '[' {
 				t = t[2:] + t[0:2]
 			}
-			re := regexp.MustCompile(`(int|float64)`)
-			t = string(re.ReplaceAll([]byte(t), []byte("number")))
-			re = regexp.MustCompile(`bool`)
-			t = string(re.ReplaceAll([]byte(t), []byte("boolean")))
-			re = regexp.MustCompile(`time.Time`)
-			t = string(re.ReplaceAll([]byte(t), []byte("Date")))
+
+
 			str += fmt.Sprintf("%s%s: %s;\n", indentStr, utils.SnakeToCamelCase(p), t)
 		}
 		str += "}\n\n"
@@ -212,7 +247,12 @@ func ParseTypes(s []byte, lang Lang, indent int, name string) string {
 	flaten := re.ReplaceAll([]byte(s), []byte(""))
 
 	allMaps := make(map[string]map[string]string, 0)
-	makeTypeMap(flaten, name, allMaps)
+	if flaten[0] == '[' {
+		idx, _:= findClosingIdx(flaten[1:], '{')
+		makeTypeMap(flaten[1:idx], name, &allMaps)
+	} else {
+		makeTypeMap(flaten, name, &allMaps)
+	}
 
 	if lang == GO {
 		return goStruct(&allMaps, indent)
