@@ -34,10 +34,13 @@ func findClosingIdx(b []byte, op byte) (int, error) {
 			continue
 		}
 		if b[i] == '"' {
-			i++
 			re := regexp.MustCompile(`[^\\]"`)
 			idx := re.FindIndex(b[i:])
+			if idx == nil {
+				return -1, fmt.Errorf("unmatched \"")
+			}
 			i += idx[1]
+			continue
 		}
 		if b[i] == op+2 {
 			openingCount--
