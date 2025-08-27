@@ -106,6 +106,8 @@
       }
     }
   ],
-  "null_value": null
+  "null_value": null,
+  "empty_arr": [],
+  "empty_obj": {},
+  "empty_arr_obj": [{}]
 }
-

@@ -88,6 +88,10 @@ func findType(b []byte, param string, allMaps map[string]map[string]string) (str
 		}
 
 		if b[i] == '{' {
+			if b[i+1] == '}' {
+				allMaps[utils.SnakeToCamelCase(param)] = make(map[string]string, 0)
+				return utils.Capitalize(param), i + 2, nil
+			}
 			idx, err := findClosingIdx(b[i:], '{')
 			if err != nil {
 				log.Fatal(err)
@@ -97,6 +101,9 @@ func findType(b []byte, param string, allMaps map[string]map[string]string) (str
 		}
 
 		if b[i] == '[' {
+			if b[i+1] == ']' {
+				return "any", i + 2, nil
+			}
 			t, _, err := findType(b[i+1:], param, allMaps)
 			if err != nil {
 				break
@@ -111,7 +118,7 @@ func findType(b []byte, param string, allMaps map[string]map[string]string) (str
 		if b[i] == 'n' {
 			re := regexp.MustCompile(`,"\w+":|$`)
 			endIdxs := re.FindIndex(b[i:])
-			return "null", i + endIdxs[0], nil
+			return "any", i + endIdxs[0], nil
 		}
 		i++
 	}
