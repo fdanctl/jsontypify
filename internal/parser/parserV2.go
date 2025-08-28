@@ -3,8 +3,10 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/fdanctl/jsontypify/internal/utils"
 )
@@ -13,7 +15,9 @@ import (
 func assertType(v any) string {
 	switch t := v.(type) {
 	case float64:
-		// verify if it's int
+		if math.Trunc(t) == t {
+			return "int"
+		}
 		return "float64"
 	case string:
 		if utils.IsDate(t) {
@@ -65,14 +69,43 @@ func makeTypeMap(name string, obj *map[string]any, allMaps *map[string]map[strin
 			if len(arr) == 0 {
 				t = "[]any"
 			} else {
-				of := assertType(arr[0])
-				if of == "map" {
-					m := arr[0].(map[string]any)
-					of = utils.Capitalize(utils.SnakeToCamelCase(k))
-					of = safeName(of, allMaps)
-					makeTypeMap(of, &m, allMaps)
+				tArr := make([]string, len(arr))
+				isAny := false
+				for i, val := range arr {
+					tipo := assertType(val)
+
+					if tipo == "map" {
+						m := arr[i].(map[string]any)
+						tipo = utils.Capitalize(utils.SnakeToCamelCase(k))
+
+						if i == 0 {
+							tipo = safeName(tipo, allMaps)
+							makeTypeMap(tipo, &m, allMaps)
+						} else if !isAny && tArr[0] != tipo {
+							isAny = true
+							tipo = safeName(tipo, allMaps)
+							makeTypeMap(tipo, &m, allMaps)
+						}
+					} else {
+						if !isAny && i > 0 && tArr[0] != tipo {
+							isAny = true
+						}
+					}
+					tArr[i] = tipo
 				}
-				t = "[]" + of
+				if isAny {
+					t = "[" + strings.Join(tArr, ", ") + "]"
+				} else {
+					t = "[]" + tArr[0]
+				}
+				// of := assertType(arr[0])
+				// if of == "map" {
+				// 	m := arr[0].(map[string]any)
+				// 	of = utils.Capitalize(utils.SnakeToCamelCase(k))
+				// 	of = safeName(of, allMaps)
+				// 	makeTypeMap(of, &m, allMaps)
+				// }
+				// t = "[]" + of
 			}
 		}
 
