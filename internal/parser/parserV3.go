@@ -1,18 +1,30 @@
 package parser
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/fdanctl/jsontypify/internal/utils"
 )
 
-// change to handle ts and go (maybe map)
-func assertType(v any) string {
-	return ""
+func safeName(name string, allMaps *map[string]map[string]string) string {
+	var n int
+	_, ok := (*allMaps)[name]
+	for ok {
+		n++
+		k := name + strconv.Itoa(n)
+		_, ok = (*allMaps)[k]
+	}
+	if n == 0 {
+		return name
+	} else {
+		name += strconv.Itoa(n)
+		return name
+	}
 }
 
 func parseArr(name string, dec *json.Decoder, allMaps *map[string]map[string]string, keys *map[string][]string) string {
@@ -30,11 +42,11 @@ func parseArr(name string, dec *json.Decoder, allMaps *map[string]map[string]str
 		case json.Delim:
 			if val == json.Delim('{') {
 				t = utils.Capitalize(name)
+				// t = safeName(t, allMaps)
 				parseObj(t, dec, allMaps, keys)
 			}
 			if val == json.Delim('[') {
 				t = parseArr(name, dec, allMaps, keys)
-				fmt.Println("Dude")
 			}
 		case bool:
 			t = "bool"
@@ -98,11 +110,11 @@ func parseObj(name string, dec *json.Decoder, allMaps *map[string]map[string]str
 		}
 
 		var t string
-		fmt.Println(k)
 		switch val := tk.(type) {
 		case json.Delim:
 			t = utils.Capitalize(k)
 			if val == json.Delim('{') {
+				t = safeName(t, allMaps)
 				parseObj(t, dec, allMaps, keys)
 			}
 			if val == json.Delim('[') {
@@ -136,39 +148,47 @@ func parseObj(name string, dec *json.Decoder, allMaps *map[string]map[string]str
 		panic(err)
 	}
 	(*allMaps)[name] = typeMap
-	(*keys)[name] = orderedFields
 
-	(*keys)["root"] = append((*keys)["root"], name)
-}
-
-func ParseTypes(s []byte, lang Lang, indent int, name string) string {
-	if !json.Valid(s) {
-		panic("Invalid json")
+	if _, ok := (*keys)[name]; !ok {
+		(*keys)["root"] = append((*keys)["root"], name)
 	}
 
-	dec := json.NewDecoder(bytes.NewReader(s))
+	(*keys)[name] = orderedFields
+}
+
+func ParseTypes(s io.Reader, lang Lang, indent int, name string) string {
+	// if !json.Valid(s) {
+	// 	panic("Invalid json")
+	// }
+	//
+	dec := json.NewDecoder(s)
 	dec.UseNumber()
 
 	allMaps := make(map[string]map[string]string, 0)
 	keys := make(map[string][]string, 0)
 
-	// dec.Token()
 	for dec.More() {
 		t, err := dec.Token()
 		if err != nil {
 			panic(t)
 		}
 
-		// keys := make([]string, 0)
-		switch t.(type) {
+		switch val := t.(type) {
 		case json.Delim:
-			parseObj(name, dec, &allMaps, &keys)
-		default:
-			fmt.Println("hello", t)
+			_, ok := allMaps[name]
+			if val == json.Delim('{') && !ok {
+				parseObj(name, dec, &allMaps, &keys)
+			}
+		default: 
+			panic(fmt.Sprint("unexpected char:", val))
 		}
 	}
 
-	return goStruct(&allMaps, 4, &keys)
+	if lang == GO {
+		return goStruct(&allMaps, indent, &keys)
+	} else {
+		return tsInterface(&allMaps, indent, &keys)
+	}
 }
 
 func goStruct(allMaps *map[string]map[string]string, indent int, keys *map[string][]string) string {
@@ -181,7 +201,51 @@ func goStruct(allMaps *map[string]map[string]string, indent int, keys *map[strin
 	for _, k := range (*keys)["root"] {
 		str += fmt.Sprintf("type %s struct {\n", utils.Capitalize(k))
 		for _, param := range (*keys)[k] {
-			str += fmt.Sprintf("%s%s %s `json:\"%s\"`\n", indentStr, utils.Capitalize(utils.SnakeToCamelCase(param)), (*allMaps)[k][param], param)
+			t := (*allMaps)[k][param]
+			re := regexp.MustCompile(`\[[^\]]{1}.*\]`)
+			t = re.ReplaceAllStringFunc(t, func(s string) string {
+				re := regexp.MustCompile(`[A-Z]\w*`)
+				unusedMaps := re.FindAllString(t, -1)
+				for _, val := range unusedMaps {
+					delete(*keys, val)
+				}
+				return "[]any"
+			})
+			t = re.ReplaceAllString(t, "[]any")
+			str += fmt.Sprintf("%s%s %s `json:\"%s\"`\n", indentStr, utils.Capitalize(utils.SnakeToCamelCase(param)), t, param)
+		}
+		str += "}\n\n"
+	}
+	return str
+}
+
+func tsInterface(allMaps *map[string]map[string]string, indent int, keys *map[string][]string) string {
+	var indentStr string
+	for range indent {
+		indentStr += " "
+	}
+
+	var str string
+	for _, k := range (*keys)["root"] {
+		str += fmt.Sprintf("type %s struct {\n", utils.Capitalize(k))
+		for _, param := range (*keys)[k] {
+			t := (*allMaps)[k][param]
+			re := regexp.MustCompile(`int|float64`)
+			t = re.ReplaceAllString(t, "number")
+
+			re = regexp.MustCompile(`bool`)
+			t = re.ReplaceAllString(t, "boolean")
+
+			re = regexp.MustCompile(`time\.Time`)
+			t = re.ReplaceAllString(t, "Date")
+
+			re = regexp.MustCompile(`((\[\])+)(\w+)(,|$)`)
+			t = re.ReplaceAllStringFunc(t, func(s string) string {
+				groups := re.FindStringSubmatch(s)
+				return groups[3] + groups[1] + groups[4]
+			})
+
+			str += fmt.Sprintf("%s%s: %s;\n", indentStr, utils.SnakeToCamelCase(param), t)
 		}
 		str += "}\n\n"
 	}

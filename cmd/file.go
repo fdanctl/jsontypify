@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -44,12 +45,18 @@ to quickly create a Cobra application.`,
 		}
 
 		for _, path := range args {
-			data, err := os.ReadFile(path)
+			f, err := os.Open(path)
+			if err != nil {
+				panic(err)
+			}
+			defer f.Close()
+
+			reader := bufio.NewReader(f)
 			if err != nil {
 				fmt.Println(path)
 			}
 
-			res := parser.ParseTypes(data, parser.Lang(lang), indent, name)
+			res := parser.ParseTypes(reader, parser.Lang(lang), indent, name)
 			println(res)
 		}
 	},

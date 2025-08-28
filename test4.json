@@ -1,0 +1,14 @@
+{
+  "id": 1,
+  "name": "Alice's",
+  "email": "alice@example.com",
+  "ee": null,
+  "bbb": true,
+  "adress": {
+    "street": "st",
+    "floor": 2
+  }, 
+  "array": [["s"], ["f", "s", 3, true, null]],
+  "arr": ["s"],
+  "arr.arr": [["s"]]
+}

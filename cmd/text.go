@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/fdanctl/jsontypify/internal/parser"
 	"github.com/spf13/cobra"
@@ -44,7 +45,7 @@ to quickly create a Cobra application.`,
 			log.Fatalf("%s is not a valid language. Valid languages: %s", lang, parser.GetValidLangs())
 		}
 
-		res := parser.ParseTypes([]byte(str), parser.Lang(lang), indent, name)
+		res := parser.ParseTypes(strings.NewReader(str), parser.Lang(lang), indent, name)
 		println(res)
 	},
 }

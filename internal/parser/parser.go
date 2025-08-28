@@ -1,26 +1,16 @@
 package parser
 
-import (
-	// "encoding/json"
-	// "fmt"
-	// "log"
-	// "regexp"
-	"slices"
-	// "strconv"
-	"strings"
-
-	// "github.com/fdanctl/jsontypify/internal/utils"
-)
-
-type Lang string
-
-const (
-	GO Lang = "go"
-	TS Lang = "ts"
-)
-
-var validLangs = []string{"go", "ts"}
-
+// import (
+// 	// "encoding/json"
+// 	// "fmt"
+// 	// "log"
+// 	// "regexp"
+// 	"slices"
+// 	// "strconv"
+// 	"strings"
+//
+// 	// "github.com/fdanctl/jsontypify/internal/utils"
+// )
 // func findClosingIdx(b []byte, op byte) (int, error) {
 // 	if op != '[' && op != '{' {
 // 		return -1, fmt.Errorf("op char must be '[' or '{'")
@@ -229,15 +219,6 @@ var validLangs = []string{"go", "ts"}
 // 	}
 // 	return str
 // }
-
-func IsValidLang(s string) bool {
-	return slices.Contains(validLangs, s)
-}
-
-func GetValidLangs() string {
-	return strings.Join(validLangs, ", ")
-}
-
 // func ParseTypes(s []byte, lang Lang, indent int, name string) string {
 // 	if !json.Valid(s) {
 // 		log.Fatal("Invalid json")
