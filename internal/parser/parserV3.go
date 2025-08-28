@@ -167,6 +167,7 @@ func ParseTypes(s io.Reader, lang Lang, indent int, name string) string {
 	allMaps := make(map[string]map[string]string, 0)
 	keys := make(map[string][]string, 0)
 
+	loop:
 	for dec.More() {
 		t, err := dec.Token()
 		if err != nil {
@@ -178,6 +179,8 @@ func ParseTypes(s io.Reader, lang Lang, indent int, name string) string {
 			_, ok := allMaps[name]
 			if val == json.Delim('{') && !ok {
 				parseObj(name, dec, &allMaps, &keys)
+			} else if ok {
+				break loop
 			}
 		default: 
 			panic(fmt.Sprint("unexpected char:", val))
