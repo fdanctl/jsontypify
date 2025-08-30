@@ -244,7 +244,7 @@ func tsInterface(
 
 	var str string
 	for _, k := range (*keys)["root"] {
-		str += fmt.Sprintf("type %s struct {\n", utils.Capitalize(k))
+		str += fmt.Sprintf("export interface %s {\n", utils.Capitalize(k))
 		for _, param := range (*keys)[k] {
 			t := (*allMaps)[k][param]
 			re := regexp.MustCompile(`int|float64`)
