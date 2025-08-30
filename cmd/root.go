@@ -1,30 +1,71 @@
 /*
 Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
 import (
+	"fmt"
+	"io"
+	"log"
 	"os"
 
+	"github.com/fdanctl/jsontypify/internal/parser"
 	"github.com/spf13/cobra"
 )
 
-
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "jsontypify",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Use:   "jsontypify [flags] <file_path>",
+	Args:  cobra.ExactArgs(1),
+	Short: "Convert raw JSON to Go struct or TypeScript interface",
+	Long:  `A tool to quickly convert raw JSON data into a Go struct or TypeScript interface.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Run: func(cmd *cobra.Command, args []string) {
+		var inputReader io.Reader
+
+		
+		if len(args) == 0 {
+			cmd.Help()
+			return
+		} else if args[0] != "-" {
+			// In Unix and CLI convention, a single dash "-" often represents stdin instead of a filename.
+			file, err := os.Open(args[0])
+			if err != nil {
+				panic(err)
+			}
+			defer file.Close()
+			inputReader = file
+		} else {
+			inputReader = cmd.InOrStdin()
+		}
+
+		indent, err := cmd.Flags().GetInt("indent")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		lang, err := cmd.Flags().GetString("language")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		name, err := cmd.Flags().GetString("name")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		if !parser.IsValidLang(lang) {
+			log.Fatalf(
+				"%s is not a valid language. Valid languages: %s",
+				lang,
+				parser.GetValidLangs(),
+			)
+		}
+
+		res := parser.ParseTypes(inputReader, parser.Lang(lang), indent, name)
+		fmt.Fprintln(cmd.OutOrStdout(), res)
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -45,7 +86,12 @@ func init() {
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	rootCmd.Flags().IntP("indent", "i", 4, "output indentation")
+
+	langHelpMsg := fmt.Sprintf("output to especified language (%s)", parser.GetValidLangs())
+	rootCmd.Flags().StringP("language", "l", "go", langHelpMsg)
+
+	rootCmd.Flags().StringP("name", "n", "Main", "struct/interface name")
 }
-
-
