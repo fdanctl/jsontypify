@@ -2,6 +2,7 @@ package parser
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -10,6 +11,34 @@ import (
 
 	"github.com/fdanctl/jsontypify/internal/utils"
 )
+
+func assertType(v any) (string, error) {
+	switch val := v.(type) {
+	case json.Delim:
+		if val == json.Delim('{') {
+			return "{", nil
+		}
+		if val == json.Delim('[') {
+			return "[", nil
+		}
+	case bool:
+		return "bool", nil
+	case json.Number:
+		re := regexp.MustCompile(`\.`)
+		if re.Match([]byte(val)) {
+			return "float64", nil
+		}
+		return "int", nil
+	case string:
+		if utils.IsDate(val) {
+			return "time.Time", nil
+		}
+		return "string", nil
+	case nil:
+		return "any", nil
+	}
+	return "", errors.New("Error asserting type")
+}
 
 func safeName(name string, allMaps *map[string]map[string]string) string {
 	var n int
@@ -27,7 +56,12 @@ func safeName(name string, allMaps *map[string]map[string]string) string {
 	}
 }
 
-func parseArr(name string, dec *json.Decoder, allMaps *map[string]map[string]string, keys *map[string][]string) string {
+func parseArr(
+	name string,
+	dec *json.Decoder,
+	allMaps *map[string]map[string]string,
+	keys *map[string][]string,
+) string {
 	tArr := make([]string, 0)
 	isAny := false
 
@@ -37,33 +71,16 @@ func parseArr(name string, dec *json.Decoder, allMaps *map[string]map[string]str
 			panic(err)
 		}
 
-		var t string
-		switch val := tk.(type) {
-		case json.Delim:
-			if val == json.Delim('{') {
-				t = utils.Capitalize(name)
-				// t = safeName(t, allMaps)
-				parseObj(t, dec, allMaps, keys)
-			}
-			if val == json.Delim('[') {
-				t = parseArr(name, dec, allMaps, keys)
-			}
-		case bool:
-			t = "bool"
-		case json.Number:
-			re := regexp.MustCompile(`\.`)
-			if re.Match([]byte(val)) {
-				t = "float64"
-			} else {
-				t = "int"
-			}
-		case string:
-			if utils.IsDate(t) {
-				t = "time.Time"
-			}
-			t = "string"
-		case nil:
-			t = "any"
+		t, err := assertType(tk)
+		if err != nil {
+			panic(err)
+		}
+		if t == "{" {
+			t = utils.Capitalize(name)
+			parseObj(t, dec, allMaps, keys)
+		}
+		if t == "[" {
+			t = parseArr(name, dec, allMaps, keys)
 		}
 
 		if !isAny && len(tArr) > 0 && tArr[0] != t {
@@ -87,7 +104,12 @@ func parseArr(name string, dec *json.Decoder, allMaps *map[string]map[string]str
 	}
 }
 
-func parseObj(name string, dec *json.Decoder, allMaps *map[string]map[string]string, keys *map[string][]string) {
+func parseObj(
+	name string,
+	dec *json.Decoder,
+	allMaps *map[string]map[string]string,
+	keys *map[string][]string,
+) {
 	typeMap := make(map[string]string)
 	orderedFields := make([]string, 0)
 
@@ -109,33 +131,19 @@ func parseObj(name string, dec *json.Decoder, allMaps *map[string]map[string]str
 			panic(err)
 		}
 
-		var t string
-		switch val := tk.(type) {
-		case json.Delim:
+		t, err := assertType(tk)
+		if err != nil {
+			panic(err)
+		}
+
+		if t == "{" {
 			t = utils.Capitalize(k)
-			if val == json.Delim('{') {
-				t = safeName(t, allMaps)
-				parseObj(t, dec, allMaps, keys)
-			}
-			if val == json.Delim('[') {
-				t = parseArr(t, dec, allMaps, keys)
-			}
-		case bool:
-			t = "bool"
-		case json.Number:
-			re := regexp.MustCompile(`\.`)
-			if re.Match([]byte(val)) {
-				t = "float64"
-			} else {
-				t = "int"
-			}
-		case string:
-			if utils.IsDate(t) {
-				t = "time.Time"
-			}
-			t = "string"
-		case nil:
-			t = "any"
+			t = safeName(t, allMaps)
+			parseObj(t, dec, allMaps, keys)
+		}
+		if t == "[" {
+			t = utils.Capitalize(k)
+			t = parseArr(t, dec, allMaps, keys)
 		}
 
 		typeMap[k] = t
@@ -157,17 +165,13 @@ func parseObj(name string, dec *json.Decoder, allMaps *map[string]map[string]str
 }
 
 func ParseTypes(s io.Reader, lang Lang, indent int, name string) string {
-	// if !json.Valid(s) {
-	// 	panic("Invalid json")
-	// }
-	//
 	dec := json.NewDecoder(s)
 	dec.UseNumber()
 
 	allMaps := make(map[string]map[string]string, 0)
 	keys := make(map[string][]string, 0)
 
-	loop:
+loop:
 	for dec.More() {
 		t, err := dec.Token()
 		if err != nil {
@@ -182,7 +186,7 @@ func ParseTypes(s io.Reader, lang Lang, indent int, name string) string {
 			} else if ok {
 				break loop
 			}
-		default: 
+		default:
 			panic(fmt.Sprint("unexpected char:", val))
 		}
 	}
@@ -215,14 +219,24 @@ func goStruct(allMaps *map[string]map[string]string, indent int, keys *map[strin
 				return "[]any"
 			})
 			t = re.ReplaceAllString(t, "[]any")
-			str += fmt.Sprintf("%s%s %s `json:\"%s\"`\n", indentStr, utils.Capitalize(utils.SnakeToCamelCase(param)), t, param)
+			str += fmt.Sprintf(
+				"%s%s %s `json:\"%s\"`\n",
+				indentStr,
+				utils.Capitalize(utils.SnakeToCamelCase(param)),
+				t,
+				param,
+			)
 		}
 		str += "}\n\n"
 	}
 	return str
 }
 
-func tsInterface(allMaps *map[string]map[string]string, indent int, keys *map[string][]string) string {
+func tsInterface(
+	allMaps *map[string]map[string]string,
+	indent int,
+	keys *map[string][]string,
+) string {
 	var indentStr string
 	for range indent {
 		indentStr += " "

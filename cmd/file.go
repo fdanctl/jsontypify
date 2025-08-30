@@ -65,8 +65,8 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(fileCmd)
 	fileCmd.Flags().IntP("indent", "i", 4, "Output indentation")
-	fileCmd.Flags().
-		StringP("language", "l", "go", fmt.Sprintf("Output to especified language (%s)", parser.GetValidLangs()))
+	langHelpMsg := fmt.Sprintf("Output to especified language (%s)", parser.GetValidLangs())
+	fileCmd.Flags().StringP("language", "l", "go", langHelpMsg)
 	fileCmd.Flags().StringP("name", "n", "Main", "Struct/Interface name")
 
 	// Here you will define your flags and configuration settings.

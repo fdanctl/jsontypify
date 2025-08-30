@@ -42,7 +42,11 @@ to quickly create a Cobra application.`,
 		}
 
 		if !parser.IsValidLang(lang) {
-			log.Fatalf("%s is not a valid language. Valid languages: %s", lang, parser.GetValidLangs())
+			log.Fatalf(
+				"%s is not a valid language. Valid languages: %s",
+				lang,
+				parser.GetValidLangs(),
+			)
 		}
 
 		res := parser.ParseTypes(strings.NewReader(str), parser.Lang(lang), indent, name)
@@ -53,7 +57,8 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(textCmd)
 	textCmd.Flags().IntP("indent", "i", 4, "Output indentation")
-	textCmd.Flags().StringP("language", "l", "go", fmt.Sprintf("Output to especified language (%s)", parser.GetValidLangs()))
+	langHelpMsg := fmt.Sprintf("Output to especified language (%s)", parser.GetValidLangs())
+	textCmd.Flags().StringP("language", "l", "go", langHelpMsg)
 	textCmd.Flags().StringP("name", "n", "Main", "Struct/Interface name")
 
 	// Here you will define your flags and configuration settings.
