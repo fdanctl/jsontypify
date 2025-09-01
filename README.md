@@ -27,10 +27,14 @@ jsontypify [flags] <file_path>
 
 - `<file_path>` can be a file path or '-' to use stdin.
 
-Example:
+Examples:
 
 ```bash
 jsontypify --language go input.json
+```
+
+```sh
+curl https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Quillbolt%20Hedgehog | jsontypify -
 ```
 
 ## Neovim intergration
